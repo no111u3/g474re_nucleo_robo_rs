@@ -8,15 +8,15 @@ use hal::stm32;
 use stm32g4xx_hal as hal;
 
 use cortex_m_rt::entry;
-use log::info;
 
-#[macro_use]
-mod utils;
+use defmt::info;
+
+use defmt_rtt as _;
+
+use panic_halt as _;
 
 #[entry]
 fn main() -> ! {
-    utils::logger::init();
-
     info!("start");
     let dp = stm32::Peripherals::take().expect("cannot take peripherals");
     let mut rcc = dp.RCC.constrain();
