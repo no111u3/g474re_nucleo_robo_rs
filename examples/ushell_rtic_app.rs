@@ -13,12 +13,15 @@ use hal::prelude::*;
 use hal::serial::{Event::Rxne, FullConfig, Serial};
 use hal::stm32;
 use hal::syscfg::SysCfgExt;
+use hal::pwm::*;
 
 use dwt_systick_monotonic::DwtSystick;
 
 use core::fmt::Write;
 
-type LedType = gpioa::PA5<Output<PushPull>>;
+use btoi::btoi;
+
+type LedType = Pwm<stm32::TIM2, C1, ComplementaryImpossible, ActiveHigh, ActiveHigh>;
 
 mod shell {
     use super::*;
@@ -30,7 +33,7 @@ mod shell {
 
     pub const CMD_MAX_LEN: usize = 32;
 
-    pub type Autocomplete = StaticAutocomplete<5>;
+    pub type Autocomplete = StaticAutocomplete<6>;
     pub type History = LRUHistory<{ CMD_MAX_LEN }, 32>;
     pub type Uart = Serial<stm32::USART2, gpioa::PA2<Alternate<7>>, gpioa::PA3<Alternate<7>>>;
     pub type Shell = UShell<Uart, Autocomplete, History, { CMD_MAX_LEN }>;
@@ -53,8 +56,70 @@ mod shell {
         }
 
         fn button_click(&mut self) -> EnvResult {
-            self.led.lock(|led| led.toggle()).ok();
+            let max_duty = self.led.lock(|pwm| pwm.get_max_duty());
+            let duty = self.led.lock(|pwm| pwm.get_duty());
+            if duty < max_duty / 2 {
+                self.led.lock(|pwm| pwm.set_duty(max_duty));
+            } else {
+                self.led.lock(|pwm| pwm.set_duty(0));
+            }
             Ok(())
+        }
+
+        fn pwm_cmd(&mut self, shell: &mut Shell, args: &str) -> EnvResult {
+            match btoi::<u32>(args.as_bytes()) {
+                Ok(duty) if duty <= 100 => {
+                    self.pwm_set_duty(duty);
+                    write!(shell, "{0:}Led enabled: duty={1:}%{0:}\r\n", CR, duty)?;
+                }
+                _ => {
+                    write!(shell, "{0:}unsupported duty cycle{0:}\r\n", CR)?;
+                }
+            }
+            Ok(())
+        }
+
+        fn status_cmd(&mut self, shell: &mut Shell) -> EnvResult {
+            let duty = self.pwm_get_duty();
+            if duty == 0 {
+                write!(shell, "{0:}Led disabled{0:}\r\n", CR)?;
+            } else {
+                write!(shell, "{0:}Led enabled: duty={1:}%{0:}\r\n", CR, duty)?;
+            }
+            Ok(())
+        }
+
+        fn off_cmd(&mut self, shell: &mut Shell) -> EnvResult {
+            let duty = self.pwm_get_duty();
+            if duty == 0 {
+                write!(shell, "{0:}Led already off{0:}\r\n", CR)?;
+            } else {
+                self.pwm_set_duty(0);
+                write!(shell, "{0:}Led disabled{0:}\r\n", CR)?;
+            }
+            Ok(())
+        }
+
+        fn on_cmd(&mut self, shell: &mut Shell) -> EnvResult {
+            let duty = self.pwm_get_duty();
+            if duty != 0 {
+                write!(shell, "{0:}Led already on{0:}\r\n", CR)?;
+            } else {
+                self.pwm_set_duty(100);
+                write!(shell, "{0:}Led enabled: duty={1:}%{0:}\r\n", CR, 100)?;
+            }
+            Ok(())
+        }
+
+        fn pwm_set_duty(&mut self, pwm_percentage: u32) {
+            let max_duty = self.led.lock(|pwm| pwm.get_max_duty());
+            let duty = max_duty * pwm_percentage / 100;
+            self.led.lock(|pwm| pwm.set_duty(duty));
+        }
+
+        fn pwm_get_duty(&mut self) -> u32 {
+            let max_duty = self.led.lock(|pwm| pwm.get_max_duty());
+            self.led.lock(|pwm| pwm.get_duty()) * 100 / max_duty
         }
 
         fn help_cmd(&mut self, shell: &mut Shell, args: &str) -> EnvResult {
@@ -69,6 +134,10 @@ mod shell {
         fn command(&mut self, shell: &mut Shell, cmd: &str, args: &str) -> EnvResult {
             match cmd {
                 "clear" => shell.clear()?,
+                "pwm" => self.pwm_cmd(shell, args)?,
+                "status" => self.status_cmd(shell)?,
+                "on" => self.on_cmd(shell)?,
+                "off" => self.off_cmd(shell)?,
                 "help" => self.help_cmd(shell, args)?,
                 "" => shell.write_str(CR)?,
                 _ => write!(shell, "{0:}unsupported command: \"{1:}\"{0:}", CR, cmd)?,
@@ -90,7 +159,7 @@ mod shell {
     }
 
     pub const AUTOCOMPLETE: Autocomplete =
-        StaticAutocomplete(["clear", "help", "off", "on", "status"]);
+        StaticAutocomplete(["clear", "help", "off", "on", "pwm", "status"]);
 
     const SHELL_PROMPT: &str = "#> ";
     const CR: &str = "\r\n";
@@ -101,6 +170,7 @@ USAGE:\r\n\
 COMMANDS:\r\n\
 \ton        Enable led\r\n\
 \toff       Disable led\r\n\
+\tpwm       Set pwm value\r\n\
 \tstatus    Get led status\r\n\
 \tclear     Clear screen\r\n\
 \thelp      Print this message\r\n\
@@ -151,7 +221,12 @@ mod app {
         button.trigger_on_edge(&mut exti, SignalEdge::Rising);
         button.enable_interrupt(&mut exti);
         // led
-        let led = gpioa.pa5.into_push_pull_output();
+        let mut led = ctx
+            .device
+            .TIM2
+            .pwm(gpioa.pa5.into_alternate(), 200.khz(), &mut rcc);
+        led.set_duty(0);
+        led.enable();
 
         // serial
         let tx = gpioa.pa2.into_alternate();
