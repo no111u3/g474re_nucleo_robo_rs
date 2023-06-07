@@ -182,7 +182,8 @@ mod app {
     use super::*;
     type ButtonType = gpioc::PC13<Input<PullDown>>;
 
-    const SYSFREQ: u32 = 24_000_000;
+    // Default system clocked by HSI (16 MHz)
+    const SYSFREQ: u32 = 16_000_000;
     #[monotonic(binds = SysTick, default = true)]
     type Mono = DwtSystick<SYSFREQ>;
 
