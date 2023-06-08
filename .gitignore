@@ -11,3 +11,6 @@ Cargo.lock
 
 # Remove OS X specific files
 .DS_Store
+
+# Remove idea idea files
+.idea/
