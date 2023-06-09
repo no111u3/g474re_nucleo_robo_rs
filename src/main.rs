@@ -11,6 +11,8 @@ use defmt::info;
 use defmt_rtt as _;
 
 use hal::gpio::*;
+use hal::pwm::*;
+use hal::stm32::*;
 use hal::prelude::*;
 use hal::serial::{Event::Rxne, FullConfig};
 
@@ -19,6 +21,61 @@ use dwt_systick_monotonic::DwtSystick;
 use core::fmt::Write;
 
 use shell::*;
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum MotorState {
+    HardBrake,
+    Brake(u32),
+    Release,
+    Cw(u32),
+    Ccw(u32),
+}
+
+pub struct Mx1508 {
+    pwm1: Pwm<TIM2, C2, ComplementaryImpossible, ActiveHigh, ActiveHigh>,
+    pwm2: Pwm<TIM2, C3, ComplementaryImpossible, ActiveHigh, ActiveHigh>,
+    motor_state: MotorState,
+}
+
+impl Mx1508 {
+    pub fn hard_brake(&mut self) {
+        self.pwm1.set_duty(self.pwm1.get_max_duty());
+        self.pwm2.set_duty(self.pwm2.get_max_duty());
+        self.motor_state = MotorState::HardBrake;
+    }
+
+    pub fn brake(&mut self, duty :u32) {
+        self.pwm1.set_duty(duty);
+        self.pwm2.set_duty(duty);
+        self.motor_state = MotorState::Brake(duty);
+    }
+
+    pub fn release(&mut self) {
+        self.pwm1.set_duty(0);
+        self.pwm2.set_duty(0);
+        self.motor_state = MotorState::Release;
+    }
+
+    pub fn cw(&mut self, duty :u32) {
+        self.pwm1.set_duty(duty);
+        self.pwm2.set_duty(0);
+        self.motor_state = MotorState::Cw(duty);
+    }
+
+    pub fn ccw(&mut self, duty :u32) {
+        self.pwm1.set_duty(0);
+        self.pwm2.set_duty(duty);
+        self.motor_state = MotorState::Ccw(duty);
+    }
+
+    pub fn get_max_duty(&self) -> u32 {
+        self.pwm1.get_max_duty()
+    }
+
+    pub fn get_state(&self) -> MotorState {
+        self.motor_state
+    }
+}
 
 #[rtic::app(device = hal::stm32, peripherals = true, dispatchers = [USART1])]
 mod app {
@@ -31,7 +88,7 @@ mod app {
 
     #[shared]
     struct Shared {
-        device_on: bool,
+        motor: Mx1508,
     }
 
     #[local]
@@ -51,6 +108,7 @@ mod app {
         info!("Init UART");
 
         let gpio_a = ctx.device.GPIOA.split(&mut rcc);
+        let gpio_b = ctx.device.GPIOB.split(&mut rcc);
 
         // serial
         let tx = gpio_a.pa2.into_alternate();
@@ -68,13 +126,29 @@ mod app {
 
         writeln!(shell, "\r\nSystem shell at USART2\r\n").unwrap();
 
-        // device status TODO: Replace to real device shared objects
-        let device_on = true;
+        // motor
+        let (mut pwm1, mut pwm2) = ctx
+            .device
+            .TIM2
+            .pwm((gpio_b.pb3.into_alternate(), gpio_b.pb10.into_alternate()), 500.hz(), &mut rcc);
+        pwm1.set_duty(pwm1.get_max_duty());
+        pwm2.set_duty(pwm2.get_max_duty());
+        pwm1.enable();
+        pwm2.enable();
+
+        let motor_state = MotorState::HardBrake;
+
+        // device objects
+        let motor = Mx1508{
+            pwm1,
+            pwm2,
+            motor_state,
+        };
 
         (
             Shared {
                 // Initialization of shared resources go here
-                device_on,
+                motor,
             },
             Local {
                 // Initialization of local resources go here
@@ -89,7 +163,7 @@ mod app {
         env::spawn(EnvSignal::Shell).ok();
     }
 
-    #[task(priority = 2, capacity = 8, local = [shell], shared = [device_on])]
+    #[task(priority = 2, capacity = 8, local = [shell], shared = [motor])]
     fn env(ctx: env::Context, sig: EnvSignal) {
         let mut env = ctx.shared;
         env.on_signal(ctx.local.shell, sig).ok();
