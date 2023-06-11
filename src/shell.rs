@@ -18,7 +18,7 @@ use rtic::Mutex;
 pub const CMD_MAX_LEN: usize = 32;
 
 pub type Autocomplete = StaticAutocomplete<9>;
-pub type History = LRUHistory<{ CMD_MAX_LEN }, 32>;
+pub type History = LRUHistory<{ CMD_MAX_LEN }, 16>;
 pub type Uart = Serial<stm32::USART2, gpioa::PA2<Alternate<7>>, gpioa::PA3<Alternate<7>>>;
 pub type Shell = UShell<Uart, Autocomplete, History, { CMD_MAX_LEN }>;
 
