@@ -17,7 +17,7 @@ use rtic::Mutex;
 
 pub const CMD_MAX_LEN: usize = 32;
 
-pub type Autocomplete = StaticAutocomplete<8>;
+pub type Autocomplete = StaticAutocomplete<9>;
 pub type History = LRUHistory<{ CMD_MAX_LEN }, 32>;
 pub type Uart = Serial<stm32::USART2, gpioa::PA2<Alternate<7>>, gpioa::PA3<Alternate<7>>>;
 pub type Shell = UShell<Uart, Autocomplete, History, { CMD_MAX_LEN }>;
@@ -54,7 +54,7 @@ impl Env<'_> {
         match btoi::<u32>(args.as_bytes()) {
             Ok(duty) if duty <= max_duty => {
                 self.motor.lock(|motor| motor.brake(duty));
-                write!(shell, "{0:}Brake enabled: duty={1:}%{0:}\r\n", CR, duty)?;
+                write!(shell, "{0:}Brake enabled: duty={1:}{0:}\r\n", CR, duty)?;
             }
             _ => {
                 write!(shell, "{0:}unsupported duty cycle{0:}\r\n", CR)?;
@@ -75,7 +75,7 @@ impl Env<'_> {
         match btoi::<u32>(args.as_bytes()) {
             Ok(duty) if duty <= max_duty => {
                 self.motor.lock(|motor| motor.cw(duty));
-                write!(shell, "{0:}Clockwise enabled: duty={1:}%{0:}\r\n", CR, duty)?;
+                write!(shell, "{0:}Clockwise enabled: duty={1:}{0:}\r\n", CR, duty)?;
             }
             _ => {
                 write!(shell, "{0:}unsupported duty cycle{0:}\r\n", CR)?;
@@ -91,7 +91,7 @@ impl Env<'_> {
                 self.motor.lock(|motor| motor.ccw(duty));
                 write!(
                     shell,
-                    "{0:}Counter-clockwise enabled: duty={1:}%{0:}\r\n",
+                    "{0:}Counter-clockwise enabled: duty={1:}{0:}\r\n",
                     CR, duty
                 )?;
             }
@@ -115,6 +115,23 @@ impl Env<'_> {
         Ok(())
     }
 
+    fn speed_cmd(&mut self, shell: &mut Shell) -> EnvResult {
+        let angle_speed = self
+            .angle_sensor
+            .lock(|angle_sensor| angle_sensor.read_angle_speed());
+
+        match angle_speed {
+            Ok(angle_speed) => {
+                write!(shell, "{0:}Angle speed is {1:}{0:}", CR, angle_speed)?;
+            }
+            Err(error) => {
+                write!(shell, "{0:}Error for read status is {1:?}{0:}", CR, error)?;
+            }
+        }
+
+        Ok(())
+    }
+
     fn help_cmd(&mut self, shell: &mut Shell, args: &str) -> EnvResult {
         match args {
             _ => shell.write_str(HELP)?,
@@ -132,6 +149,7 @@ impl Environment<Uart, Autocomplete, History, (), { CMD_MAX_LEN }> for Env<'_> {
             "cw" => self.cw_cmd(shell, args)?,
             "ccw" => self.ccw_cmd(shell, args)?,
             "state" => self.state_cmd(shell)?,
+            "speed" => self.speed_cmd(shell)?,
             "clear" => shell.clear()?,
             "help" => self.help_cmd(shell, args)?,
             "" => shell.write_str(CR)?,
@@ -154,7 +172,7 @@ impl Environment<Uart, Autocomplete, History, (), { CMD_MAX_LEN }> for Env<'_> {
 }
 
 pub const AUTOCOMPLETE: Autocomplete = StaticAutocomplete([
-    "hard", "brake", "release", "cw", "ccw", "state", "clear", "help",
+    "hard", "brake", "release", "cw", "ccw", "state", "speed", "clear", "help",
 ]);
 
 const SHELL_PROMPT: &str = "#> ";
@@ -170,6 +188,7 @@ COMMANDS:\r\n\
 \tcw        Clockwise\r\n\
 \tccw       Counter-clockwise\r\n\
 \tstate     Motor state\r\n\
+\tspeed     Motor speed\r\n\
 \tclear     Clear screen\r\n\
 \thelp      Print this message\r\n\
 ";

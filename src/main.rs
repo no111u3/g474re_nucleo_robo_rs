@@ -14,13 +14,16 @@ use hal::gpio::*;
 use hal::prelude::*;
 use hal::pwm::*;
 use hal::serial::{Event::Rxne, FullConfig};
-use hal::stm32::*;
+use hal::spi::Spi;
+use hal::stm32::{SPI1, TIM2};
 
 use dwt_systick_monotonic::DwtSystick;
 
 use core::fmt::Write;
 
 use shell::*;
+
+use tle5012::{self, Tle5012, MODE};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum MotorState {
@@ -77,6 +80,18 @@ impl Mx1508 {
     }
 }
 
+type AngleSensor = Tle5012<
+    Spi<
+        SPI1,
+        (
+            gpioa::PA5<Alternate<5>>,
+            gpioa::PA6<Alternate<5>>,
+            gpioa::PA7<Alternate<5>>,
+        ),
+    >,
+    gpioa::PA9<Output<PushPull>>,
+>;
+
 #[rtic::app(device = hal::stm32, peripherals = true, dispatchers = [USART1])]
 mod app {
     use super::*;
@@ -89,6 +104,7 @@ mod app {
     #[shared]
     struct Shared {
         motor: Mx1508,
+        angle_sensor: AngleSensor,
     }
 
     #[local]
@@ -146,10 +162,25 @@ mod app {
             motor_state,
         };
 
+        // Setup spi i/o
+        let sck = gpio_a.pa5.into_alternate();
+        let miso = gpio_a.pa6.into_alternate();
+        let mosi = gpio_a.pa7.into_alternate();
+        let mut nss = gpio_a.pa9.into_push_pull_output();
+        nss.set_high().ok();
+
+        let spi = ctx
+            .device
+            .SPI1
+            .spi((sck, miso, mosi), MODE, 500.khz(), &mut rcc);
+
+        let angle_sensor = Tle5012::new(spi, nss).unwrap();
+
         (
             Shared {
                 // Initialization of shared resources go here
                 motor,
+                angle_sensor,
             },
             Local {
                 // Initialization of local resources go here
@@ -164,7 +195,7 @@ mod app {
         env::spawn(EnvSignal::Shell).ok();
     }
 
-    #[task(priority = 2, capacity = 8, local = [shell], shared = [motor])]
+    #[task(priority = 2, capacity = 8, local = [shell], shared = [motor, angle_sensor])]
     fn env(ctx: env::Context, sig: EnvSignal) {
         let mut env = ctx.shared;
         env.on_signal(ctx.local.shell, sig).ok();
