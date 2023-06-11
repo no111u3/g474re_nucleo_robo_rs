@@ -125,7 +125,16 @@ mod app {
             }
         }
 
-        tle5012::spawn_after(500.millis()).unwrap();
+        match angle_sensor.read_angle_speed() {
+            Ok(angle_speed) => {
+                writeln!(serial, "Angle speed is {}\r\n", angle_speed).unwrap();
+            }
+            Err(error) => {
+                writeln!(serial, "Error for read status is {:?}\r\n", error).unwrap();
+            }
+        }
+
+        tle5012::spawn_after(200.millis()).unwrap();
     }
 
     #[idle]
