@@ -39,8 +39,7 @@ mod app {
     struct Shared {}
 
     #[local]
-    struct Local {
-    }
+    struct Local {}
 
     #[init]
     fn init(mut ctx: init::Context) -> (Shared, Local, init::Monotonics) {
@@ -75,13 +74,15 @@ mod app {
         let mut dc = gpio_a.pa6.into_push_pull_output();
         dc.set_high().ok();
 
-        let spi = ctx
-            .device
-            .SPI1
-            .spi((sck, spi::NoMiso, mosi), spi::Mode {
+        let spi = ctx.device.SPI1.spi(
+            (sck, spi::NoMiso, mosi),
+            spi::Mode {
                 polarity: spi::Polarity::IdleLow,
                 phase: spi::Phase::CaptureOnFirstTransition,
-            }, 500.khz(), &mut rcc);
+            },
+            500.khz(),
+            &mut rcc,
+        );
 
         let interface = display_interface_spi::SPIInterface::new(spi, dc, nss);
         let mut display = Ssd1306::new(interface, DisplaySize128x64, DisplayRotation::Rotate0)
@@ -104,12 +105,7 @@ mod app {
 
         display.flush().unwrap();
 
-        (
-            Shared {},
-            Local {
-            },
-            init::Monotonics(mono),
-        )
+        (Shared {}, Local {}, init::Monotonics(mono))
     }
 
     #[idle]

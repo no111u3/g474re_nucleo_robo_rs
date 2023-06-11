@@ -87,14 +87,14 @@ mod app {
 
         let mut angle_sensor = Tle5012::new(spi, nss).unwrap();
 
-            match angle_sensor.read_status() {
-                Ok(status) => {
-                    writeln!(serial, "Angle sensor status is 0x{:x}\r\n", status).unwrap();
-                }
-                Err(error) => {
-                    writeln!(serial, "Error for read status is {:?}\r\n", error).unwrap();
-                }
+        match angle_sensor.read_status() {
+            Ok(status) => {
+                writeln!(serial, "Angle sensor status is 0x{:x}\r\n", status).unwrap();
             }
+            Err(error) => {
+                writeln!(serial, "Error for read status is {:?}\r\n", error).unwrap();
+            }
+        }
 
         // Schedule the tle5012 task
         tle5012::spawn().ok();
