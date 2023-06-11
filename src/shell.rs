@@ -7,13 +7,13 @@ use hal::serial::Serial;
 use hal::stm32;
 
 pub use ushell::{
-    autocomplete::StaticAutocomplete, history::LRUHistory, Input as ushell_input,
-    ShellError as ushell_error, SpinResult, UShell, Environment, control
+    autocomplete::StaticAutocomplete, control, history::LRUHistory, Environment,
+    Input as ushell_input, ShellError as ushell_error, SpinResult, UShell,
 };
 
-use rtic::Mutex;
 use crate::MotorState;
 use btoi::btoi;
+use rtic::Mutex;
 
 pub const CMD_MAX_LEN: usize = 32;
 
@@ -32,8 +32,7 @@ pub type EnvResult = SpinResult<Uart, ()>;
 impl Env<'_> {
     pub fn on_signal(&mut self, shell: &mut Shell, sig: EnvSignal) -> EnvResult {
         match sig {
-            EnvSignal::Shell =>
-                shell.spin(self),
+            EnvSignal::Shell => shell.spin(self),
         }
     }
 
@@ -90,7 +89,11 @@ impl Env<'_> {
         match btoi::<u32>(args.as_bytes()) {
             Ok(duty) if duty <= max_duty => {
                 self.motor.lock(|motor| motor.ccw(duty));
-                write!(shell, "{0:}Counter-clockwise enabled: duty={1:}%{0:}\r\n", CR, duty)?;
+                write!(
+                    shell,
+                    "{0:}Counter-clockwise enabled: duty={1:}%{0:}\r\n",
+                    CR, duty
+                )?;
             }
             _ => {
                 write!(shell, "{0:}unsupported duty cycle{0:}\r\n", CR)?;
@@ -103,7 +106,11 @@ impl Env<'_> {
         let state = self.motor.lock(|motor| motor.get_state());
         let max_duty = self.motor.lock(|motor| motor.get_max_duty());
 
-        write!(shell, "{0:}Motor state: {1:?}\r\nMax duty: {2}{0:}", CR, state, max_duty)?;
+        write!(
+            shell,
+            "{0:}Motor state: {1:?}\r\nMax duty: {2}{0:}",
+            CR, state, max_duty
+        )?;
 
         Ok(())
     }
@@ -146,8 +153,9 @@ impl Environment<Uart, Autocomplete, History, (), { CMD_MAX_LEN }> for Env<'_> {
     }
 }
 
-pub const AUTOCOMPLETE: Autocomplete =
-    StaticAutocomplete(["hard", "brake", "release", "cw", "ccw", "state", "clear", "help"]);
+pub const AUTOCOMPLETE: Autocomplete = StaticAutocomplete([
+    "hard", "brake", "release", "cw", "ccw", "state", "clear", "help",
+]);
 
 const SHELL_PROMPT: &str = "#> ";
 const CR: &str = "\r\n";

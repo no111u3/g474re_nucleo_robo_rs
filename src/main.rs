@@ -11,10 +11,10 @@ use defmt::info;
 use defmt_rtt as _;
 
 use hal::gpio::*;
-use hal::pwm::*;
-use hal::stm32::*;
 use hal::prelude::*;
+use hal::pwm::*;
 use hal::serial::{Event::Rxne, FullConfig};
+use hal::stm32::*;
 
 use dwt_systick_monotonic::DwtSystick;
 
@@ -44,7 +44,7 @@ impl Mx1508 {
         self.motor_state = MotorState::HardBrake;
     }
 
-    pub fn brake(&mut self, duty :u32) {
+    pub fn brake(&mut self, duty: u32) {
         self.pwm1.set_duty(duty);
         self.pwm2.set_duty(duty);
         self.motor_state = MotorState::Brake(duty);
@@ -56,13 +56,13 @@ impl Mx1508 {
         self.motor_state = MotorState::Release;
     }
 
-    pub fn cw(&mut self, duty :u32) {
+    pub fn cw(&mut self, duty: u32) {
         self.pwm1.set_duty(duty);
         self.pwm2.set_duty(0);
         self.motor_state = MotorState::Cw(duty);
     }
 
-    pub fn ccw(&mut self, duty :u32) {
+    pub fn ccw(&mut self, duty: u32) {
         self.pwm1.set_duty(0);
         self.pwm2.set_duty(duty);
         self.motor_state = MotorState::Ccw(duty);
@@ -127,10 +127,11 @@ mod app {
         writeln!(shell, "\r\nSystem shell at USART2\r\n").unwrap();
 
         // motor
-        let (mut pwm1, mut pwm2) = ctx
-            .device
-            .TIM2
-            .pwm((gpio_b.pb3.into_alternate(), gpio_b.pb10.into_alternate()), 500.hz(), &mut rcc);
+        let (mut pwm1, mut pwm2) = ctx.device.TIM2.pwm(
+            (gpio_b.pb3.into_alternate(), gpio_b.pb10.into_alternate()),
+            500.hz(),
+            &mut rcc,
+        );
         pwm1.set_duty(pwm1.get_max_duty());
         pwm2.set_duty(pwm2.get_max_duty());
         pwm1.enable();
@@ -139,7 +140,7 @@ mod app {
         let motor_state = MotorState::HardBrake;
 
         // device objects
-        let motor = Mx1508{
+        let motor = Mx1508 {
             pwm1,
             pwm2,
             motor_state,

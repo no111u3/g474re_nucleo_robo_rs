@@ -10,10 +10,10 @@ use defmt_rtt as _;
 
 use hal::gpio::*;
 use hal::prelude::*;
+use hal::pwm::*;
 use hal::serial::{Event::Rxne, FullConfig, Serial};
 use hal::stm32;
 use hal::syscfg::SysCfgExt;
-use hal::pwm::*;
 
 use dwt_systick_monotonic::DwtSystick;
 
@@ -27,8 +27,8 @@ mod shell {
     use super::*;
 
     pub use ushell::{
-        autocomplete::StaticAutocomplete, history::LRUHistory, Input as ushell_input,
-        ShellError as ushell_error, SpinResult, UShell, Environment, control
+        autocomplete::StaticAutocomplete, control, history::LRUHistory, Environment,
+        Input as ushell_input, ShellError as ushell_error, SpinResult, UShell,
     };
 
     pub const CMD_MAX_LEN: usize = 32;
@@ -49,8 +49,7 @@ mod shell {
     impl Env<'_> {
         pub fn on_signal(&mut self, shell: &mut Shell, sig: EnvSignal) -> EnvResult {
             match sig {
-                EnvSignal::Shell =>
-                    shell.spin(self),
+                EnvSignal::Shell => shell.spin(self),
                 EnvSignal::ButtonClick => self.button_click(),
             }
         }
@@ -241,7 +240,8 @@ mod app {
         serial.listen(Rxne);
 
         // shell
-        let mut shell = shell::UShell::new(serial, shell::AUTOCOMPLETE, shell::LRUHistory::default());
+        let mut shell =
+            shell::UShell::new(serial, shell::AUTOCOMPLETE, shell::LRUHistory::default());
 
         writeln!(shell, "\r\nHello from USART2\r\n").unwrap();
 
