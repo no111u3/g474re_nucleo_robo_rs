@@ -21,6 +21,8 @@ use core::fmt::Write;
 
 use btoi::btoi;
 
+use core::str::FromStr;
+
 type LedType = Pwm<stm32::TIM2, C1, ComplementaryImpossible, ActiveHigh, ActiveHigh>;
 
 mod shell {
@@ -33,7 +35,7 @@ mod shell {
 
     pub const CMD_MAX_LEN: usize = 32;
 
-    pub type Autocomplete = StaticAutocomplete<6>;
+    pub type Autocomplete = StaticAutocomplete<7>;
     pub type History = LRUHistory<{ CMD_MAX_LEN }, 32>;
     pub type Uart = Serial<stm32::USART2, gpioa::PA2<Alternate<7>>, gpioa::PA3<Alternate<7>>>;
     pub type Shell = UShell<Uart, Autocomplete, History, { CMD_MAX_LEN }>;
@@ -110,6 +112,18 @@ mod shell {
             Ok(())
         }
 
+        fn float_cmd(&mut self, shell: &mut Shell, args: &str) -> EnvResult {
+            match f32::from_str(args) {
+                Ok(num) => {
+                    write!(shell, "{0:}float={1:}{0:}\r\n", CR, num)?;
+                }
+                _ => {
+                    write!(shell, "{0:}unsupported float{0:}\r\n", CR)?;
+                }
+            }
+            Ok(())
+        }
+
         fn pwm_set_duty(&mut self, pwm_percentage: u32) {
             let max_duty = self.led.lock(|pwm| pwm.get_max_duty());
             let duty = max_duty * pwm_percentage / 100;
@@ -137,6 +151,7 @@ mod shell {
                 "status" => self.status_cmd(shell)?,
                 "on" => self.on_cmd(shell)?,
                 "off" => self.off_cmd(shell)?,
+                "float" => self.float_cmd(shell, args)?,
                 "help" => self.help_cmd(shell, args)?,
                 "" => shell.write_str(CR)?,
                 _ => write!(shell, "{0:}unsupported command: \"{1:}\"{0:}", CR, cmd)?,
@@ -158,7 +173,7 @@ mod shell {
     }
 
     pub const AUTOCOMPLETE: Autocomplete =
-        StaticAutocomplete(["clear", "help", "off", "on", "pwm", "status"]);
+        StaticAutocomplete(["clear", "help", "off", "on", "pwm", "status", "float"]);
 
     const SHELL_PROMPT: &str = "#> ";
     const CR: &str = "\r\n";
@@ -171,6 +186,7 @@ COMMANDS:\r\n\
 \toff       Disable led\r\n\
 \tpwm       Set pwm value\r\n\
 \tstatus    Get led status\r\n\
+\tfloat     Float parse test\r\n\
 \tclear     Clear screen\r\n\
 \thelp      Print this message\r\n\
 ";
