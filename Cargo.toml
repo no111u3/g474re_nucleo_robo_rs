@@ -31,6 +31,12 @@ ssd1306 = "0.7.1"
 display-interface-spi = "0.4.1"
 embedded-graphics = "0.7.1"
 
+# float parser/writter
+[dependencies.lexical-core]
+version = "0.8.5"
+default-features = false
+features = ["write-floats", "parse-floats"]
+
 [dependencies.stm32g4xx-hal]
 version = "0.0.1"
 features = ["stm32g474", "rt"]

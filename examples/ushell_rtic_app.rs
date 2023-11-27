@@ -21,7 +21,7 @@ use core::fmt::Write;
 
 use btoi::btoi;
 
-use core::str::FromStr;
+use lexical_core::BUFFER_SIZE;
 
 type LedType = Pwm<stm32::TIM2, C1, ComplementaryImpossible, ActiveHigh, ActiveHigh>;
 
@@ -113,10 +113,13 @@ mod shell {
         }
 
         fn float_cmd(&mut self, shell: &mut Shell, args: &str) -> EnvResult {
-            match f32::from_str(args) {
+            match lexical_core::parse::<f32>(args.as_bytes()) {
                 Ok(num) => {
-                    write!(shell, "{0:}float={1:}{0:}\r\n", CR, num)?;
-                    write!(shell, "{0:}also multiple by 1.1={1:}{0:}", CR, num * 1.1f32)?;
+                    let mut buffer = [b'0'; BUFFER_SIZE];
+                    let out = lexical_core::write(num, &mut buffer);
+                    write!(shell, "{0:}float={1:}{0:}", CR, core::str::from_utf8(&out).unwrap())?;
+                    let out = lexical_core::write(num * 1.1f32, &mut buffer);
+                    write!(shell, "{0:}also multiple by 1.1={1:}{0:}", CR, core::str::from_utf8(&out).unwrap())?;
                 }
                 _ => {
                     write!(shell, "{0:}unsupported float{0:}\r\n", CR)?;
