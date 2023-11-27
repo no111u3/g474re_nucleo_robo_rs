@@ -26,6 +26,8 @@ use embedded_graphics::{
     text::{Baseline, Text},
 };
 
+use hal::time::RateExtU32;
+
 #[rtic::app(device = hal::stm32, peripherals = true)]
 mod app {
     use super::*;
@@ -80,7 +82,7 @@ mod app {
                 polarity: spi::Polarity::IdleLow,
                 phase: spi::Phase::CaptureOnFirstTransition,
             },
-            500.khz(),
+            500.kHz(),
             &mut rcc,
         );
 

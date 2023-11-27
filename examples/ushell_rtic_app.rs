@@ -23,6 +23,8 @@ use btoi::btoi;
 
 use lexical_core::BUFFER_SIZE;
 
+use hal::time::RateExtU32;
+
 type LedType = Pwm<stm32::TIM2, C1, ComplementaryImpossible, ActiveHigh, ActiveHigh>;
 
 mod shell {
@@ -254,7 +256,7 @@ mod app {
         let mut led = ctx
             .device
             .TIM2
-            .pwm(gpioa.pa5.into_alternate(), 200.khz(), &mut rcc);
+            .pwm(gpioa.pa5.into_alternate(), 200.kHz(), &mut rcc);
         led.set_duty(0);
         led.enable();
 

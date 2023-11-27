@@ -11,7 +11,7 @@ use defmt_rtt as _;
 use hal::gpio::*;
 use hal::prelude::*;
 use hal::serial::{Event::Rxne, FullConfig, Serial};
-use hal::spi::{self, Spi};
+use hal::spi::Spi;
 use hal::stm32;
 
 use core::fmt::Write;
@@ -19,6 +19,8 @@ use core::fmt::Write;
 use tle5012::{self, Tle5012, MODE};
 
 use dwt_systick_monotonic::*;
+
+use hal::time::{ExtU32, RateExtU32};
 
 #[rtic::app(device = hal::stm32, peripherals = true, dispatchers = [USART1])]
 mod app {
@@ -83,7 +85,7 @@ mod app {
         let spi = ctx
             .device
             .SPI1
-            .spi((sck, miso, mosi), MODE, 500.khz(), &mut rcc);
+            .spi((sck, miso, mosi), MODE, 500.kHz(), &mut rcc);
 
         let mut angle_sensor = Tle5012::new(spi, nss).unwrap();
 

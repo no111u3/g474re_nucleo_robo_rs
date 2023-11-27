@@ -13,7 +13,6 @@ use hal::prelude::*;
 use hal::pwm::*;
 use hal::stm32;
 use hal::syscfg::SysCfgExt;
-use hal::timer::*;
 
 pub enum PwmDuty {
     Quarter,
@@ -21,6 +20,8 @@ pub enum PwmDuty {
     ThreeQuarters,
     Full,
 }
+
+use hal::time::RateExtU32;
 
 #[rtic::app(device = hal::stm32, peripherals = true)]
 mod app {
@@ -51,7 +52,7 @@ mod app {
         let mut pwm = ctx
             .device
             .TIM2
-            .pwm(port_a.pa5.into_alternate(), 2.hz(), &mut rcc);
+            .pwm(port_a.pa5.into_alternate(), 2.Hz(), &mut rcc);
         pwm.set_duty(pwm.get_max_duty() / 2);
         pwm.enable();
 
