@@ -116,6 +116,7 @@ mod shell {
             match f32::from_str(args) {
                 Ok(num) => {
                     write!(shell, "{0:}float={1:}{0:}\r\n", CR, num)?;
+                    write!(shell, "{0:}also multiple by 1.1={1:}{0:}", CR, num * 1.1f32)?;
                 }
                 _ => {
                     write!(shell, "{0:}unsupported float{0:}\r\n", CR)?;
