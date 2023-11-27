@@ -117,9 +117,19 @@ mod shell {
                 Ok(num) => {
                     let mut buffer = [b'0'; BUFFER_SIZE];
                     let out = lexical_core::write(num, &mut buffer);
-                    write!(shell, "{0:}float={1:}{0:}", CR, core::str::from_utf8(&out).unwrap())?;
+                    write!(
+                        shell,
+                        "{0:}float={1:}{0:}",
+                        CR,
+                        core::str::from_utf8(&out).unwrap()
+                    )?;
                     let out = lexical_core::write(num * 1.1f32, &mut buffer);
-                    write!(shell, "{0:}also multiple by 1.1={1:}{0:}", CR, core::str::from_utf8(&out).unwrap())?;
+                    write!(
+                        shell,
+                        "{0:}also multiple by 1.1={1:}{0:}",
+                        CR,
+                        core::str::from_utf8(&out).unwrap()
+                    )?;
                 }
                 _ => {
                     write!(shell, "{0:}unsupported float{0:}\r\n", CR)?;
