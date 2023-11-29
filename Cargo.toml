@@ -38,9 +38,10 @@ default-features = false
 features = ["write-floats", "parse-floats"]
 
 [dependencies.stm32g4xx-hal]
-version = "0.0.1"
+version = "0.0.2"
 features = ["stm32g474", "rt"]
 git = "https://github.com/stm32-rs/stm32g4xx-hal"
+# path = "../stm32g4xx-hal"
 
 [profile.dev]
 codegen-units = 1
