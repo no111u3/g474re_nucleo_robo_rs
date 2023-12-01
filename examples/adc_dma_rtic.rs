@@ -11,24 +11,29 @@ use defmt_rtt as _;
 use hal::{
     adc::{
         config::{Continuous, Dma as AdcDma, SampleTime, Sequence},
-        AdcClaim, ClockSource, Temperature, Vref, Adc, DMA as aDMA,
+        Adc, AdcClaim, ClockSource, Temperature, Vref, DMA as aDMA,
     },
+    dma::{config::DmaConfig, stream, stream::DMAExt, transfer, TransferExt},
     gpio::*,
     prelude::*,
     serial::{Event::Rxne, FullConfig, Serial},
     stm32,
-    dma::{transfer, stream, config::DmaConfig, stream::DMAExt, TransferExt},
 };
 
 use core::fmt::Write;
 
 #[rtic::app(device = hal::stm32, peripherals = true)]
 mod app {
+    use stm32g4xx_hal::signature::*;
     use super::*;
 
     #[shared]
     struct Shared {
-        transfer: transfer::CircTransfer<stream::Stream0<stm32::DMA1>, Adc<stm32::ADC1, aDMA>, &'static mut [u16; 10]>,
+        transfer: transfer::CircTransfer<
+            stream::Stream0<stm32::DMA1>,
+            Adc<stm32::ADC1, aDMA>,
+            &'static mut [u16; 15],
+        >,
     }
 
     #[local]
@@ -37,7 +42,7 @@ mod app {
         //buffer: Option<&'static mut [u16; 2]>,
     }
 
-    #[init(local = [buffer: [u16; 10] = [0; 10]])]
+    #[init(local = [buffer: [u16; 15] = [0; 15]])]
     fn init(ctx: init::Context) -> (Shared, Local, init::Monotonics) {
         info!("Init system");
 
@@ -77,10 +82,12 @@ mod app {
             .claim(ClockSource::SystemClock, &rcc, &mut delay, true);
 
         adc.enable_temperature(&ctx.device.ADC12_COMMON);
+        adc.enable_vref(&ctx.device.ADC12_COMMON);
         adc.set_continuous(Continuous::Continuous);
         adc.reset_sequence();
         adc.configure_channel(&pa0, Sequence::One, SampleTime::Cycles_640_5);
         adc.configure_channel(&Temperature, Sequence::Two, SampleTime::Cycles_640_5);
+        adc.configure_channel(&Vref, Sequence::Three, SampleTime::Cycles_640_5);
 
         info!("Setup DMA");
         let mut transfer = streams.0.into_circ_peripheral_to_memory_transfer(
@@ -91,23 +98,30 @@ mod app {
 
         transfer.start(|adc| adc.start_conversion());
 
+        info!("t30 constant: {}", VtempCal30::get().read());
+        info!("t110 constant: {}", VtempCal110::get().read());
 
         (Shared { transfer }, Local { serial }, init::Monotonics())
     }
 
     #[task(binds = DMA1_CH1, shared = [transfer], local = [serial])]
     fn dma(mut ctx: dma::Context) {
-
-        let mut b = [0_u16; 4];
-        let r = ctx.shared.transfer.lock(|transfer| {
-            transfer.read_exact(&mut b)
-        }
-        );
+        let mut b = [0_u16; 6];
+        let r = ctx
+            .shared
+            .transfer
+            .lock(|transfer| transfer.read_exact(&mut b));
         info!("read: {}", r);
 
-        let millivolts = Vref::sample_to_millivolts((b[0] + b[2]) / 2);
-        info!("pa3: {}mV", millivolts);
-        let temp = Temperature::temperature_to_degrees_centigrade((b[1] + b[3]) / 2);
+        // |a0|t|v|a0|t|v|
+        //  0  1 2 3  4 5
+
+        let millivolts = Vref::sample_to_millivolts((b[0] + b[3]) / 2);
+        info!("pa0: {}mV", millivolts);
+        let vref = Vref::sample_to_millivolts((b[2] + b[5]) / 2);
+        info!("vref: {}mV", vref);
+        let raw_temp = (((b[1] + b[4]) / 2) as f32 * (33.0 / 30.0)) as u16;
+        let temp = Temperature::temperature_to_degrees_centigrade(raw_temp);
         info!("temp: {}°C", temp); // Note: Temperature seems quite low...
     }
 
