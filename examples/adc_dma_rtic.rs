@@ -8,6 +8,8 @@ use stm32g4xx_hal as hal;
 use defmt::info;
 use defmt_rtt as _;
 
+use micromath::{F32Ext};
+
 use hal::{
     adc::{
         config::{Continuous, Dma as AdcDma, SampleTime, Sequence},
@@ -24,8 +26,9 @@ use core::fmt::Write;
 
 #[rtic::app(device = hal::stm32, peripherals = true)]
 mod app {
-    use stm32g4xx_hal::signature::*;
     use super::*;
+    use stm32g4xx_hal::adc::config;
+    use stm32g4xx_hal::signature::*;
 
     #[shared]
     struct Shared {
@@ -99,13 +102,22 @@ mod app {
         transfer.start(|adc| adc.start_conversion());
 
         info!("t30 constant: {}", VtempCal30::get().read());
-        info!("t110 constant: {}", VtempCal110::get().read());
+        info!("t110 constant: {}", VtempCal130::get().read());
+        info!("vdd constant: {}", VrefCal::get().read());
 
         (Shared { transfer }, Local { serial }, init::Monotonics())
     }
 
     #[task(binds = DMA1_CH1, shared = [transfer], local = [serial])]
     fn dma(mut ctx: dma::Context) {
+        if ctx
+            .shared
+            .transfer
+            .lock(|transfer| transfer.elements_available())
+            == 0
+        {
+            return;
+        }
         let mut b = [0_u16; 6];
         let r = ctx
             .shared
@@ -116,13 +128,35 @@ mod app {
         // |a0|t|v|a0|t|v|
         //  0  1 2 3  4 5
 
-        let millivolts = Vref::sample_to_millivolts((b[0] + b[3]) / 2);
+        let vdda = VDDA_CALIB * VrefCal::get().read() as u32 / ((b[2] + b[5]) / 2) as u32;
+
+        info!("vdda: {}mV", vdda);
+
+        let millivolts =
+            Vref::sample_to_millivolts_ext((b[0] + b[3]) / 2, vdda, config::Resolution::Twelve);
         info!("pa0: {}mV", millivolts);
-        let vref = Vref::sample_to_millivolts((b[2] + b[5]) / 2);
+        let vref =
+            Vref::sample_to_millivolts_ext((b[2] + b[5]) / 2, vdda, config::Resolution::Twelve);
         info!("vref: {}mV", vref);
-        let raw_temp = (((b[1] + b[4]) / 2) as f32 * (33.0 / 30.0)) as u16;
+        let raw_temp = (((b[1] + b[4]) / 2) as f32 * (vdda as f32 / 3000.0)) as u16;
         let temp = Temperature::temperature_to_degrees_centigrade(raw_temp);
-        info!("temp: {}°C", temp); // Note: Temperature seems quite low...
+        info!("temp: {}°C", temp);
+
+        ctx.local
+            .serial
+            .write_fmt(format_args!(
+                "vdda {}mV, pa0 {}mV, vref {}mV, temp {}.{}°C\r\n",
+                vdda,
+                millivolts,
+                vref,
+                temp as u16,
+                (temp.fract() * 100.0) as u16
+            ))
+            .unwrap();
+
+        ctx.shared
+            .transfer
+            .lock(|transfer| transfer.clear_transfer_complete_interrupt());
     }
 
     #[idle]

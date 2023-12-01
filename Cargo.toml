@@ -30,6 +30,7 @@ tle5012 = "0.1.0"
 ssd1306 = "0.7.1"
 display-interface-spi = "0.4.1"
 embedded-graphics = "0.7.1"
+micromath = "2.1.0"
 
 # float parser/writter
 [dependencies.lexical-core]
