@@ -121,9 +121,9 @@ mod app {
         )
     }
 
-    #[task(binds = TIM2, local = [timer])]
-    fn tim2(mut ctx: tim2::Context) {
-        //info!("time event");
+    #[task(binds = TIM1_UP_TIM16, local = [timer])]
+    fn tim1(mut ctx: tim1::Context) {
+        info!("time event");
         ctx.local.timer.clear_interrupt(timer::Event::TimeOut);
     }
 
