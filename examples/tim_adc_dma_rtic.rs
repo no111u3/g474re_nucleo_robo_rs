@@ -10,31 +10,30 @@ use stm32g4xx_hal as hal;
 use defmt::info;
 use defmt_rtt as _;
 
-use micromath::{F32Ext};
+use micromath::F32Ext;
 
 use hal::{
     adc::{
-        config::{Eoc, Continuous, Dma as AdcDma, SampleTime, Sequence},
+        config::{Continuous, Dma as AdcDma, Eoc, SampleTime, Sequence},
         Adc, AdcClaim, ClockSource, Temperature, Vref, DMA as aDMA,
     },
     dma::{config::DmaConfig, stream, stream::DMAExt, transfer, TransferExt},
     gpio::*,
     prelude::*,
     serial::{Event::Rxne, FullConfig, Serial},
-    stm32,
-    timer,
+    stm32, timer,
 };
 
 use core::fmt::Write;
 
 #[rtic::app(device = hal::stm32, peripherals = true)]
 mod app {
-    use dwt_systick_monotonic::ExtU32;
     use super::*;
+    use dwt_systick_monotonic::ExtU32;
     use stm32g4xx_hal::adc::config;
-    use stm32g4xx_hal::adc::config::SubGroupLength;
+    use stm32g4xx_hal::adc::config::{ExternalTrigger12, SubGroupLength, TriggerMode};
     use stm32g4xx_hal::signature::*;
-    use stm32g4xx_hal::timer::{CountDownTimer, Timer};
+    use stm32g4xx_hal::timer::{CountDownTimer, Timer, TriggerSource};
 
     #[shared]
     struct Shared {
@@ -48,7 +47,7 @@ mod app {
     #[local]
     struct Local {
         serial: Serial<stm32::USART2, gpioa::PA2<Alternate<7>>, gpioa::PA3<Alternate<7>>>,
-        timer: CountDownTimer<stm32::TIM2>,
+        timer: CountDownTimer<stm32::TIM1>,
     }
 
     #[init(local = [buffer: [u16; 15] = [0; 15]])]
@@ -83,11 +82,6 @@ mod app {
         info!("Init Gpio");
         let pa0 = gpio_a.pa0.into_analog();
 
-        info!("Init Timer");
-        let timer = Timer::new(ctx.device.TIM2, &rcc.clocks);
-        let mut timer = timer.start_count_down(500.millis());
-        timer.listen(timer::Event::TimeOut);
-
         info!("Init Adc1");
         let mut delay = ctx.core.SYST.delay(&rcc.clocks);
         let mut adc = ctx
@@ -95,15 +89,15 @@ mod app {
             .ADC1
             .claim(ClockSource::SystemClock, &rcc, &mut delay, true);
 
+        adc.set_external_trigger((TriggerMode::RisingEdge, ExternalTrigger12::Tim_1_trgo_2));
         adc.enable_temperature(&ctx.device.ADC12_COMMON);
         adc.enable_vref(&ctx.device.ADC12_COMMON);
         adc.set_continuous(Continuous::Discontinuous);
-        adc.set_subgroup_len(SubGroupLength::Six);
+        adc.set_subgroup_len(SubGroupLength::Three);
         adc.reset_sequence();
         adc.configure_channel(&pa0, Sequence::One, SampleTime::Cycles_640_5);
         adc.configure_channel(&Temperature, Sequence::Two, SampleTime::Cycles_640_5);
         adc.configure_channel(&Vref, Sequence::Three, SampleTime::Cycles_640_5);
-
 
         info!("Setup DMA");
         let mut transfer = streams.0.into_circ_peripheral_to_memory_transfer(
@@ -112,28 +106,35 @@ mod app {
             config,
         );
 
-        //transfer.start(|adc| adc.start_conversion());
+        transfer.start(|adc| adc.start_conversion());
 
-        (Shared { transfer }, Local { serial, timer }, init::Monotonics())
+        info!("Init Timer");
+        let mut timer = Timer::new(ctx.device.TIM1, &rcc.clocks);
+        timer.set_trigger_source(TriggerSource::Update);
+        let mut timer = timer.start_count_down(500.millis());
+        timer.listen(timer::Event::TimeOut);
+
+        (
+            Shared { transfer },
+            Local { serial, timer },
+            init::Monotonics(),
+        )
     }
 
-    #[task(binds = TIM2, local = [timer], shared = [transfer])]
+    #[task(binds = TIM2, local = [timer])]
     fn tim2(mut ctx: tim2::Context) {
         //info!("time event");
-        ctx.shared.transfer.lock(|transfer| {
-            transfer.start(|adc| {
-                adc.start_conversion();
-            });
-        });
         ctx.local.timer.clear_interrupt(timer::Event::TimeOut);
     }
 
     #[task(binds = DMA1_CH1, shared = [transfer], local = [serial])]
     fn dma(mut ctx: dma::Context) {
-        info!("dma event, data ready to read: {}", ctx
-            .shared
-            .transfer
-            .lock(|transfer| transfer.elements_available()));
+        info!(
+            "dma event, data ready to read: {}",
+            ctx.shared
+                .transfer
+                .lock(|transfer| transfer.elements_available())
+        );
         if ctx
             .shared
             .transfer
