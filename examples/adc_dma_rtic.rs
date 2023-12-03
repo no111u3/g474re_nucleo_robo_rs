@@ -8,7 +8,7 @@ use stm32g4xx_hal as hal;
 use defmt::info;
 use defmt_rtt as _;
 
-use micromath::{F32Ext};
+use micromath::F32Ext;
 
 use hal::{
     adc::{
