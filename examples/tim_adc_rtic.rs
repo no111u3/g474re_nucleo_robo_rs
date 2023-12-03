@@ -27,6 +27,7 @@ use core::fmt::Write;
 mod app {
     use super::*;
     use dwt_systick_monotonic::ExtU32;
+    use stm32g4xx_hal::adc::config::SubGroupLength;
 
     use stm32g4xx_hal::timer::{Timer, TriggerSource};
 
@@ -75,6 +76,7 @@ mod app {
         adc.enable_temperature(&ctx.device.ADC12_COMMON);
         adc.enable_vref(&ctx.device.ADC12_COMMON);
         adc.set_continuous(Continuous::Discontinuous);
+        adc.set_subgroup_len(SubGroupLength::Three);
         adc.reset_sequence();
         adc.configure_channel(&pa0, Sequence::One, SampleTime::Cycles_640_5);
         adc.configure_channel(&Temperature, Sequence::Two, SampleTime::Cycles_640_5);
@@ -95,6 +97,8 @@ mod app {
     #[task(binds=ADC1_2, local = [adc])]
     fn adc(ctx: adc::Context) {
         info!("adc");
+        info!("Read for adc: {}", ctx.local.adc.current_sample());
+        info!("Read for adc: {}", ctx.local.adc.current_sample());
         info!("Read for adc: {}", ctx.local.adc.current_sample());
         ctx.local.adc.clear_end_conversion_flag();
     }
